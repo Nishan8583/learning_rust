@@ -1,5 +1,6 @@
 use axum::{routing::post, Router};
-pub mod api;
+mod api;
+mod db;
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/register_user", post(api::api::register_user));

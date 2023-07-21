@@ -755,6 +755,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "tokio",
+ "tokio-postgres",
  "warp",
 ]
 
