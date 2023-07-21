@@ -1,7 +1,8 @@
 use crate::db::db;
-
 use axum::{http::StatusCode, Json};
 use serde_derive::{Deserialize, Serialize};
+
+// CreateUserRequest is struct for user query to create a new password
 #[derive(Deserialize, Serialize)]
 pub struct CreateUserRequest {
     pub username: String,
@@ -9,11 +10,14 @@ pub struct CreateUserRequest {
     pub password: String,
 }
 
+// UserCreatedMessage struct for result
 #[derive(Deserialize, Serialize)]
 pub struct UserCreatedMessage {
     pub username: String,
 }
 
+// register_user handles route for creating a user
+// it creates a db conneciton, and creates a new user
 pub async fn register_user(
     Json(payload): Json<CreateUserRequest>,
 ) -> (StatusCode, Json<UserCreatedMessage>) {
