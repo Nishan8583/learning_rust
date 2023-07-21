@@ -1,8 +1,12 @@
-use database::DB::DBConn;
+use axum::{routing::post, Router};
+pub mod api;
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/register_user", post(api::api::register_user));
 
-pub mod database;
-fn main() {
-    let mut conn = DBConn::new().unwrap();
-    conn.create_table();
-    conn.register_user(String::from("nishan")).unwrap();
+    println!("Server will listen in port 8080");
+    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
