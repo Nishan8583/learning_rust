@@ -1,5 +1,5 @@
-use crate::api::api::CreateUserRequest;
-use postgres::Error;
+use crate::api::api::{CreateUserRequest, DeleteUserrequest, UserLogin};
+use postgres::{Error, Row};
 use tokio_postgres::{Client, NoTls};
 
 // DBConn will handle db connection
@@ -58,6 +58,37 @@ impl DBConn {
             return Err(err);
         }
 
+        Ok(())
+    }
+
+    pub async fn delete_user(&mut self, user: &DeleteUserrequest) -> Result<(), Error> {
+        if let Err(err) = self
+            .client
+            .execute("DELETE FROM app_user WHERE username=$1", &[&user.username])
+            .await
+        {
+            println!("ERROR while trying to delete a user");
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    pub async fn login_user(&mut self, user_login: UserLogin) -> Result<(), Error> {
+        let value = self
+            .client
+            .query(
+                "SELECT id WHERE username=$1 AND password=$2",
+                &[&user_login.username, &user_login.password],
+            )
+            .await;
+
+        let mut row: Vec<Row> = vec![];
+        if let Err(err) = value {
+            println!("Error while authenticating user");
+            return Err(err);
+        }
+
+        row = value.unwrap();
         Ok(())
     }
 }
