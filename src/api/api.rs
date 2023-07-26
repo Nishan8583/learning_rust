@@ -1,8 +1,6 @@
 use crate::db::db;
 use axum::{http::StatusCode, Json};
 use serde_derive::{Deserialize, Serialize};
-use warp::reject::PayloadTooLarge;
-
 // CreateUserRequest is struct for user query to create a new password
 #[derive(Deserialize, Serialize)]
 pub struct CreateUserRequest {
@@ -68,8 +66,8 @@ pub async fn delete_user(
     match db_conn {
         Err(err) => {
             println!(
-                "ERROR while attempting to delete the user {:?}",
-                payload.username
+                "ERROR while attempting to delete the user {:?} {:?}",
+                payload.username, err
             );
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_delete));
         }
@@ -83,4 +81,33 @@ pub async fn delete_user(
 
     println!("User delete success");
     return (StatusCode::CREATED, Json(user_delete));
+}
+
+// login_user deletes a user
+pub async fn login_user(Json(payload): Json<UserLogin>) -> (StatusCode, Json<DeleteUserrequest>) {
+    println!("User deletion process started for {}", payload.username);
+
+    let db_conn = db::DBConn::new().await;
+    let user_login = DeleteUserrequest {
+        username: String::from(format!("{}", payload.username)),
+    };
+
+    match db_conn {
+        Err(err) => {
+            println!(
+                "Error while attempting to login a user {} {:?}",
+                payload.username, err
+            );
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_login));
+        }
+        Ok(mut conn) => {
+            if let Err(err) = conn.login_user(payload).await {
+                println!("ERROR while trying to login {:?}", err);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_login));
+            }
+        }
+    }
+
+    println!("User login success");
+    return (StatusCode::CREATED, Json(user_login));
 }

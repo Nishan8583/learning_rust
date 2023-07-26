@@ -1,10 +1,21 @@
 use crate::api::api::{CreateUserRequest, DeleteUserrequest, UserLogin};
-use postgres::{Error, Row};
+use postgres::Error;
+use std::fmt;
 use tokio_postgres::{Client, NoTls};
-
 // DBConn will handle db connection
 pub struct DBConn {
     pub client: Client,
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthenticationError {
+    pub parent_error: String,
+}
+
+impl fmt::Display for AuthenticationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "username or password error")
+    }
 }
 
 impl DBConn {
@@ -73,7 +84,7 @@ impl DBConn {
         Ok(())
     }
 
-    pub async fn login_user(&mut self, user_login: UserLogin) -> Result<(), Error> {
+    pub async fn login_user(&mut self, user_login: UserLogin) -> Result<(), AuthenticationError> {
         let value = self
             .client
             .query(
@@ -82,13 +93,20 @@ impl DBConn {
             )
             .await;
 
-        let mut row: Vec<Row> = vec![];
         if let Err(err) = value {
             println!("Error while authenticating user");
-            return Err(err);
+            return Err(AuthenticationError {
+                parent_error: err.to_string(),
+            });
         }
 
-        row = value.unwrap();
+        let rows = value.unwrap();
+        if rows.len() == 0 {
+            return Err(AuthenticationError {
+                parent_error: String::new(),
+            });
+        }
+
         Ok(())
     }
 }
