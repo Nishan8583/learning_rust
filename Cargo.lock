@@ -440,6 +440,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
+name = "jwt"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6204285f77fe7d9784db3fdc449ecce1a0114927a51d5a41c4c7a292011c015f"
+dependencies = [
+ "base64 0.13.1",
+ "crypto-common",
+ "digest",
+ "hmac",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.147"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -751,9 +766,12 @@ name = "rust_server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "hmac",
+ "jwt",
  "postgres",
  "serde",
  "serde_derive",
+ "sha2",
  "tokio",
  "tokio-postgres",
  "warp",
@@ -803,6 +821,9 @@ name = "serde"
 version = "1.0.171"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30e27d1e4fd7659406c492fd6cfaf2066ba8773de45ca75e855590f856dc34a9"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_derive"

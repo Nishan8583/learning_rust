@@ -1,4 +1,4 @@
-use crate::db::db;
+use crate::{auth::auth, db::db};
 use axum::{http::StatusCode, Json};
 use serde_derive::{Deserialize, Serialize};
 // CreateUserRequest is struct for user query to create a new password
@@ -26,6 +26,10 @@ pub struct UserLogin {
     pub password: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct Token {
+    pub token: String,
+}
 // register_user handles route for creating a user
 // it creates a db conneciton, and creates a new user
 pub async fn register_user(
@@ -84,12 +88,12 @@ pub async fn delete_user(
 }
 
 // login_user deletes a user
-pub async fn login_user(Json(payload): Json<UserLogin>) -> (StatusCode, Json<DeleteUserrequest>) {
+pub async fn login_user(Json(payload): Json<UserLogin>) -> (StatusCode, Json<Token>) {
     println!("User deletion process started for {}", payload.username);
 
     let db_conn = db::DBConn::new().await;
-    let user_login = DeleteUserrequest {
-        username: String::from(format!("{}", payload.username)),
+    let mut user_token = Token {
+        token: String::from(""),
     };
 
     match db_conn {
@@ -98,16 +102,17 @@ pub async fn login_user(Json(payload): Json<UserLogin>) -> (StatusCode, Json<Del
                 "Error while attempting to login a user {} {:?}",
                 payload.username, err
             );
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_login));
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_token));
         }
         Ok(mut conn) => {
-            if let Err(err) = conn.login_user(payload).await {
+            let token = conn.login_user(payload).await;
+            if let Err(err) = token {
                 println!("ERROR while trying to login {:?}", err);
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_login));
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(user_token));
+            } else {
+                user_token.token = token.unwrap();
+                return (StatusCode::CREATED, Json(user_token));
             }
         }
     }
-
-    println!("User login success");
-    return (StatusCode::CREATED, Json(user_login));
 }

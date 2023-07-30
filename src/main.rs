@@ -1,5 +1,6 @@
 use axum::{routing::post, Router};
 mod api;
+mod auth;
 mod db;
 #[tokio::main]
 async fn main() {

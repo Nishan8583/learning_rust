@@ -1,4 +1,5 @@
 use crate::api::api::{CreateUserRequest, DeleteUserrequest, UserLogin};
+use crate::auth;
 use postgres::Error;
 use std::fmt;
 use tokio_postgres::{Client, NoTls};
@@ -84,15 +85,24 @@ impl DBConn {
         Ok(())
     }
 
-    pub async fn login_user(&mut self, user_login: UserLogin) -> Result<(), AuthenticationError> {
+    // login_user checks if the username and password matches in the backend db, and reutrns jwt
+    // token
+    pub async fn login_user(
+        &mut self,
+        user_login: UserLogin,
+    ) -> Result<String, AuthenticationError> {
+        println!("Attempting to login user {}", user_login.username);
+
+        // performing the DB query
         let value = self
             .client
             .query(
-                "SELECT id WHERE username=$1 AND password=$2",
+                "SELECT id FROM app_user WHERE username=$1 AND password=$2",
                 &[&user_login.username, &user_login.password],
             )
             .await;
 
+        // If error was received
         if let Err(err) = value {
             println!("Error while authenticating user");
             return Err(AuthenticationError {
@@ -100,13 +110,26 @@ impl DBConn {
             });
         }
 
+        // get all the rows, and check if we received any id at all
+        // But how will it handle the case of where two usernames have the same password? I think
+        // I should enforce unique usernames
         let rows = value.unwrap();
         if rows.len() == 0 {
             return Err(AuthenticationError {
                 parent_error: String::new(),
             });
-        }
+        };
 
-        Ok(())
+        // create a signed jwt for the user
+        match auth::auth::create_signed_key(user_login.username) {
+            Ok(v) => {
+                return Ok(v);
+            }
+            Err(err) => {
+                return Err(AuthenticationError {
+                    parent_error: err.to_string(),
+                });
+            }
+        };
     }
 }
