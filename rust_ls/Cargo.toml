@@ -1,0 +1,11 @@
+[package]
+name = "rust_ls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[lib]
+name = "file_lib"
+path = "src/lib/file.rs"
+
