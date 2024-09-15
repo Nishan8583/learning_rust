@@ -1,42 +1,66 @@
 
 pub mod files{
     use std::{fs, os::unix::fs::PermissionsExt};
-    pub fn list_files(src: &str) -> Result<(),std::io::Error> {
+    pub fn list_files(padding: String, src: &str, recursive: u32) -> Result<(),std::io::Error> {
         
-        // get directory entry
+        
+        // get directory entry i.e. list files in the directory
         let path = match fs::read_dir(src) {
             Ok(dirs) => dirs,
             Err(e) => {
-                return Err(e);
+                return Err(e);  // if can not list directory, no point in moving forward
             }
         };
 
-        println!("{:<12} {:<10} {:<10}","Permission","Size","Name");
+
+        // loop through each files found in directory
         for dir in path {
 
             // if error just ignore, might be something wrong with that particular file
             // we move onto the next, do not want to panic here
-            if dir.is_err(){
-                println!("error listing directory {:?}",dir.err());
-                continue;
-            }
-            let entry = dir?; // since error canse is already handeled above
+            let entry = match dir {
+                Ok(ref v) => v,
+                Err(e) => {
+                    println!("error={:?} while trying to get direntry {}",e,src);
+                    continue;
+                }
+            };
             
-            let path = entry.path();
-            let output = prepare_print_stmt(entry);
+            let pad = padding.clone();  // cloning padding for recursive directory calls
+            let path = entry.path();  // get path
+        
+            let output = prepare_print_stmt(&padding,entry);
             if let Ok(output) = output {
                 println!("{}",output);
             } else {
                 println!("error while trying to get info for {:?} {:?}",path,output.err());
             }
+
+            let entry_clone = dir?;
+            // if the file found is a directory
+            if entry_clone.metadata()?.is_dir() {
+                // if we have not reached the number of recursive depth we wanted to go, do recursion
+                if recursive != 0 {
+                    println!("---Directory--->");
+                    if let Err(e) = list_files(pad+"+++", src, recursive-1) {
+                        println!("error={:?} while trying to recursive call for directory {:?}",e,path);
+                        continue;
+                    }
+
+                    println!("------>");
+                }
+            }
+           
+            
         }
 
         Ok(())
     }
 
-    fn prepare_print_stmt(dir: fs::DirEntry) -> Result<String,std::io::Error> {
+    fn prepare_print_stmt(padding: &String,dir: &fs::DirEntry) -> Result<String,std::io::Error> {
         let mut output  = String::new();
         let metadata = dir.metadata()?;
+        
 
         if metadata.is_dir() {
             output = output + "d";
@@ -49,6 +73,7 @@ pub mod files{
         //let creation_time = metadata.created()?;
 
         /*
+        I did not know how to get rwx info in a pretty way, so had to take help from ChatGPT
         In Unix-based systems, file permissions are represented as a set of bits. Each permission (read, write, execute) is represented by a specific bit. These permissions are divided into three categories:
 
         User (owner): The person who owns the file.
@@ -93,7 +118,7 @@ pub mod files{
             Some(v) => v,
             None => "",
         };
-        output  = format!("{:<12} {:<10} {:<10}",permission,metadata.len(),path);
+        output  = format!("{}{:<20} {:<20} {:<20}",padding,permission,metadata.len(),path);
 
         return Ok(output);
     }
