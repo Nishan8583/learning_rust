@@ -1,0 +1,22 @@
+[package]
+name = "zero2prod"
+version = "0.1.0"
+edition = "2021"
+
+[lib] # so that our code can be treated as both library and binary
+path = "src/lib.rs"
+
+[[bin]] # double square means its an array, we can have one library but multiple binaries
+path = "src/main.rs"
+name = "zero2prod"
+
+[dependencies]
+actix-web = "4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+reqwest = "0.12"
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "linker=clang", "-C", "lin-arg=fuse-ld=lld"]
