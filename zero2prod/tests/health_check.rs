@@ -2,21 +2,68 @@
 
 use std::{fmt::format, net::TcpListener};
 
-fn spawn_app() -> String {
+use sqlx::{Connection, Executor, PgConnection, PgPool};
+use uuid::Uuid;
+use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::startup::run;
+
+pub struct TestApp {
+    pub address: String,
+    pub db_pool: PgPool,
+}
+
+async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("unable to bind at any port");
     let port = listener.local_addr().unwrap().port();
-    let server = zero2prod::run(listener).expect("failed to bind to address");
+    let address = format!("http://127.0.0.1:{}", port);
+    let mut config = get_configuration().expect("issue while getting db config");
+    config.database.database_name = Uuid::new_v4().to_string();
+    let pool = configure_database(&config.database).await;
+
+    let server = run(listener, pool.clone()).expect("failed to bind to address");
     let _ = tokio::spawn(server);
-    format!("http://127.0.0.1:{}", port)
+    TestApp {
+        address: address,
+        db_pool: pool,
+    }
 }
+
+pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    let maintainance_settings = DatabaseSettings {
+        database_name: "postgres".to_string(),
+        username: "postgres".to_string(),
+        password: "password".to_string(),
+        ..config.clone()
+    };
+
+    let mut connection = PgPool::connect(&maintainance_settings.connection_string())
+        .await
+        .expect("unable to create connection");
+
+    connection
+        .execute(format!(r#"CREATE DATABASE "{}""#, config.database_name).as_str())
+        .await
+        .expect("failed");
+
+    let connection_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect("");
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("failed");
+
+    return connection_pool;
+}
+
 #[tokio::test]
 async fn test_health_check() {
-    let address = spawn_app();
+    let test_app = spawn_app().await;
     let client = reqwest::Client::new();
 
-    println!("Lets get address {}", address);
+    println!("Lets get address {}", &test_app.address);
     let response = client
-        .get(format!("{}/health_check", address))
+        .get(format!("{}/health_check", test_app.address))
         .send()
         .await
         .expect("failed to execute request");
@@ -30,12 +77,12 @@ async fn test_health_check() {
 
 #[tokio::test]
 async fn test_200_valid_data() {
-    let app_address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=test%40gmail.com";
     let response = client
-        .post(format!("{}/subscriptions", app_address))
+        .post(format!("{}/subscriptions", app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
@@ -43,11 +90,20 @@ async fn test_200_valid_data() {
         .expect("failed to execute valid subscription");
 
     assert_eq!(200, response.status().as_u16());
+
+    // query() returns a ananomous struct type generated at compile time the
+    // columns as fields
+    let saved = sqlx::query!("SELECT email, name FROM subscriptions")
+        .fetch_one(&app.db_pool)
+        .await
+        .expect("Failed to fetch from saved connection");
+
+    assert_eq!(saved.email, "test@gmail.com");
 }
 
 #[tokio::test]
 async fn test_400() {
-    let app_address = spawn_app();
+    let app = spawn_app().await;
     let client = reqwest::Client::new();
 
     let test_cases = vec![
@@ -58,7 +114,7 @@ async fn test_400() {
 
     for (invalid_body, error_message) in test_cases {
         let response = client
-            .post(format!("{}/subscriptions", app_address))
+            .post(format!("{}/subscriptions", app.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(invalid_body)
             .send()
