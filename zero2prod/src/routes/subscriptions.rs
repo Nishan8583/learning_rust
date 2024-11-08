@@ -19,25 +19,67 @@ pub struct FormData {
 // URL encoding and leveragin serde_urlencoded and Deserialize implementation of FormData which was
 // auto geneated with #[derive(serde::Deserialize)]
 // Any error is returned to caller with 400 BAD request
+#[tracing::instrument(
+    name = "Adding a new subscriber",
+    skip(form,pool), // skip these arguements from tracing
+    fields(
+        subscriber_email=%form.email,
+        subscriber_name=%form.name,
+    )
+)]
 pub async fn subscribe(
     form: web::Form<FormData>,
-    connection: web::Data<PgPool>, // web::data is an extractor, actix internally uses hashmap of data with their type identifier,
-                                   // in our sace type pgConnection, it searches in its hashmap if we have a data of that type, and if
-                                   // it finds it passes into the function
+    pool: web::Data<PgPool>, // web::data is an extractor, actix internally uses hashmap of data with their type identifier,
+                             // in our sace type pgConnection, it searches in its hashmap if we have a data of that type, and if
+                             // it finds it passes into the function
 ) -> impl Responder {
-    let request_id = Uuid::new_v4();
-    let request_span = tracing::info_span!(
+    // no need to do these because of Using macro
+    //let request_id = Uuid::new_v4();
+    /*let request_span = tracing::info_span!(
         "addin new subscriber",
         %request_id,
         subscriber_email=%form.email,
         subscriber_name=%form.name,
-    );
+    );*/
+    //let _req = request_span.enter();
 
-    let _req = request_span.enter();
+    match insert_subscriber(&pool, &form).await {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
+    // tracing::instrument macro handles asynchronous
+    /*let query_span = tracing::info_span!("Executing db query");
 
-    let query_span = tracing::info_span!("Executing db query");
+        match sqlx::query!(
+            r#"
+    INSERT INTO subscriptions (id,email,name ,subscribed_at) VALUES ($1,$2,$3,$4)
+            "#,
+            Uuid::new_v4(),
+            form.email,
+            form.name,
+            Utc::now(),
+        )
+        .execute(pool.get_ref()) // execute(connection.get_ref()) does not implement Executor, because it only allows one connection to change stuffs in db
+        .instrument(query_span)
+        .await
+        {
+            Ok(_) => {
+                tracing::info!("Subscriber already successfully added",);
+                HttpResponse::Ok().finish()
+            }
+            Err(e) => {
+                tracing::error!("subscriber could not be added");
+                HttpResponse::InternalServerError().finish()
+            }
+        }*/
+}
 
-    match sqlx::query!(
+#[tracing::instrument(
+    name = "Saving new subscriber details in the database",
+    skip(form, pool)
+)]
+pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
 INSERT INTO subscriptions (id,email,name ,subscribed_at) VALUES ($1,$2,$3,$4)
         "#,
@@ -46,29 +88,14 @@ INSERT INTO subscriptions (id,email,name ,subscribed_at) VALUES ($1,$2,$3,$4)
         form.name,
         Utc::now(),
     )
-    .execute(connection.get_ref()) // execute(connection.get_ref()) does not implement Executor, because it only allows one connection to change stuffs in db
-    .instrument(query_span)
+    .execute(pool) // execute(connection.get_ref()) does not implement Executor, because it only allows one connection to change stuffs in db
     .await
-    {
-        Ok(_) => {
-            tracing::info!(
-                "Request ID: {}  User={} was successfully added",
-                request_id,
-                form.name
-            );
-            HttpResponse::Ok().finish()
-        }
-        Err(e) => {
-            tracing::error!(
-                "Request ID: {} unable to add a subscriber {:?}",
-                request_id,
-                e
-            );
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+    .map_err(|e| {
+        tracing::error!("failed to execute query: {:?}", e);
+        e
+    })?;
+    Ok(())
 }
-
 /*
 In this code, tracing and tracing::instrument are used to manage structured, high-level logging and provide context for the asynchronous operations, particularly around HTTP requests and database interactions. Here’s how and why they’re used:
 
