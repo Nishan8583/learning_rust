@@ -1,9 +1,10 @@
 //! tests/health_check.rs
 
-use std::{fmt::format, net::TcpListener};
-
+use secrecy::ExposeSecret;
+use secrecy::Secret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::sync::LazyLock;
+use std::{fmt::format, net::TcpListener};
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
 use zero2prod::startup::run;
@@ -46,20 +47,21 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     let maintainance_settings = DatabaseSettings {
         database_name: "postgres".to_string(),
         username: "postgres".to_string(),
-        password: "password".to_string(),
+        password: Secret::new("password".to_string()),
         ..config.clone()
     };
 
-    let mut connection = PgPool::connect(&maintainance_settings.connection_string())
-        .await
-        .expect("unable to create connection");
+    let mut connection =
+        PgPool::connect(&maintainance_settings.connection_string().expose_secret())
+            .await
+            .expect("unable to create connection");
 
     connection
         .execute(format!(r#"CREATE DATABASE "{}""#, config.database_name).as_str())
         .await
         .expect("failed");
 
-    let connection_pool = PgPool::connect(&config.connection_string())
+    let connection_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("");
     sqlx::migrate!("./migrations")

@@ -15,11 +15,10 @@ async fn main() -> Result<(), std::io::Error> {
     init_subscriber(subscriber);
 
     let config = get_configuration().expect("unable to parse config");
-    let connection = PgPool::connect(&config.database.connection_string().expose_secret())
-        .await
+    let connection = PgPool::connect_lazy(&config.database.connection_string().expose_secret())
         .expect("failed to connect to db");
     // :0, means it lets os chose a random port
-    let address = format!("127.0.0.1:{}", config.application_port);
+    let address = format!("{}:{}", config.application.host, config.application.port);
     let listener = TcpListener::bind(address).expect("Could not bind to any port");
     run(listener, connection)?.await
 }
